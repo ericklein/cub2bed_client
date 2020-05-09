@@ -9,7 +9,8 @@ Client message appliance alerts server appliance of message and receives status 
 
 ### Software Dependencies
   - uses Radiohead http://www.airspayce.com/mikem/arduino/RadioHead/RadioHead-1.100.zip
-    - adfruit maintains a GitHub branch at https://github.com/adafruit/RadioHead
+    - adafruit maintains a GitHub branch at https://github.com/adafruit/RadioHead
+  - Adafruit NeoPixel https://github.com/adafruit/Adafruit_NeoPixel
 
 ### BOM
   - 1X each: Adafruit Arduino Pro Mini 328 - 5V (part 2378) + Adafruit FRM69HCW Radio Breakout (part 3070) + Adafruit FTDI Friend (part 284)
@@ -33,15 +34,13 @@ Client message appliance alerts server appliance of message and receives status 
 ### Issues
 
 ### Questions
-      - surprised iota isn't having a problem with arg3
-      - do I buffer overrun or truncate when inbound packet is larger than defined buffer len?
-      - Why are we constantly resetting buf, len in loop?
-      - how do you determine server and client without hardcoding pairs?
-      - code looks like it could send packets to multiple clients based on form of client_address declare?
+      - 041919: do I buffer overrun or truncate when inbound packet is larger than defined buffer len?
 
 ### Learnings
 
 ### Feature Requests
  
 ### Revisions
-    - 050320: first version, adapted from adapted from datagram_client
+    - 050320: first version, adapted from datagram_client
+    - 050920: implemented conditional messaging
+    - 050520: [Q 041919] code looks like it could send packets to multiple clients based on form of client_address declare? -> yes

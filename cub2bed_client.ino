@@ -17,7 +17,14 @@ ButtonHandler buttonSendMessage(sendMessageButtonPin,longButtonPressDelay);
 enum { BTN_NOPRESS = 0, BTN_SHORTPRESS, BTN_LONGPRESS };
 
 //LED
-#define ledPin  10
+//#define ledPin  10
+
+//NeoPixel
+#include <Adafruit_NeoPixel.h>
+#define neoPixelPin  10
+#define ledCount  1
+//Adafruit_NeoPixel strip = Adafruit_NeoPixel(ledCount, neoPixelPin, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(ledCount, neoPixelPin);
 
 // 900mhz radio
 #include <SPI.h>
@@ -35,9 +42,9 @@ enum { BTN_NOPRESS = 0, BTN_SHORTPRESS, BTN_LONGPRESS };
   #define RFM69_RST     2
 #endif
 // server address
-#define DEST_ADDRESS   1
+#define SERVER_ADDRESS  1
 // unique addresses for each client, can not be server address
-#define MY_ADDRESS     2
+#define MY_ADDRESS      2
 // Instantiate radio driver
 RH_RF69 rf69(RFM69_CS, RFM69_INT);
 // Class to manage message delivery and receipt, using the driver declared above
@@ -104,57 +111,118 @@ void setup()
   // Setup push button
   buttonSendMessage.init();
 
-  pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, LOW);
+  //LED
+  // pinMode(ledPin, OUTPUT);
+  // digitalWrite(ledPin, LOW);
+
+  // neopixels
+  strip.begin();
+  strip.setPixelColor(0,0,255,0);
+  strip.setBrightness(50);
+  strip.show();
 }
 
-// Dont put this on the stack:
+bool waitingForServerAction = false;
 uint8_t buf[RH_RF69_MAX_MESSAGE_LEN];
 
 void loop() 
 {
-  resolveSendMessageButton();
+  // if radio is ready and we're waiting for the second message
+  if ((rf69_manager.available()) && (waitingForServerAction))
+  {
+    // Wait for a message from a client
+    uint8_t len = sizeof(buf);
+    uint8_t from;
+    if (rf69_manager.recvfromAck(buf, &len, &from))
+    {
+      #ifdef DEBUG
+        Serial.print("Got packet from #");
+        Serial.print(SERVER_ADDRESS);
+        Serial.print(" [RSSI :");
+        Serial.print(rf69.lastRssi());
+        Serial.print("] : ");
+        Serial.println((char*)buf);
+      #endif
+      if (strcmp((char *)buf,"ontheway") == 0)
+      {
+        // visually indicate that request was successful
+        for (int i=0;i<10;i++)
+          {
+            strip.setPixelColor(0,0,255,0); // green
+            strip.show();
+            delay(100);
+            strip.setPixelColor(0,0,0,0);
+            strip.show();
+            delay(100);
+          }
+          // return to normal state indicator
+          strip.setPixelColor(0,0,255,0);
+          strip.show();
+        #ifdef DEBUG
+          Serial.println("On the way message processed!");
+        #endif
+      }
+      else if (strcmp((char *)buf,"needtowork") == 0)
+      {
+      // visually indicate that request was unsuccessful
+      for (int i=0;i<10;i++)
+          {
+            strip.setPixelColor(0,255,0,0); // red
+            strip.show();
+            delay(100);
+            strip.setPixelColor(0,0,0,0);
+            strip.show();
+            delay(100);
+          }
+          // return to normal status indicator
+          strip.setPixelColor(0,0,255,0);
+          strip.show();
+      #ifdef DEBUG
+        Serial.println("Need to work message processed");
+      #endif
+      }
+      buf[len] = 0; // zero out remaining string
+      // release second message blocker
+      waitingForServerAction = false;
+    }
+  }
+  resolveButtons();
 }
 
-void resolveSendMessageButton()
+void resolveButtons()
 {
   switch (buttonSendMessage.handle()) 
   {
     case BTN_SHORTPRESS:
-      char c2bMessage[3] = "c2b";
-      #ifdef DEBUG
-        Serial.print("button short press; sending ");
-        Serial.println(c2bMessage);
-      #endif
-      // Send a message to the server
-      if (rf69_manager.sendtoWait((uint8_t *)c2bMessage, strlen(c2bMessage), DEST_ADDRESS))
+      // only handle button press if we aren't already processing a request
+      if (!waitingForServerAction)
       {
-        // Now wait for a reply from the server
-        uint8_t len = sizeof(buf);
-        uint8_t from;   
-        if (rf69_manager.recvfromAckTimeout(buf, &len, 2000, &from))
+        uint8_t data[] = "c2b";
+        // Send message to the server
+        if (rf69_manager.sendtoWait(data, sizeof(data),SERVER_ADDRESS))
         {
-          digitalWrite(ledPin,HIGH);
-          buf[len] = 0; // zero out remaining string
           #ifdef DEBUG
-            Serial.print("Got reply from #"); Serial.print(from);
-            Serial.print(" [RSSI :");
-            Serial.print(rf69.lastRssi());
-            Serial.print("] : ");
-            Serial.println((char*)buf);
+            Serial.print("button short press; server acknowledged receiving ");
+            Serial.println((char*)data);
           #endif
+          // led
+          // digitalWrite(ledPin,HIGH);
+          // visually let the sender know the server got the message
+          strip.setPixelColor(0, 255, 255, 0); // yellow
+          strip.show();
+          waitingForServerAction = true;
         } 
         else
         {
           #ifdef DEBUG
-            Serial.println("No reply, is anyone listening?");
+            Serial.println("Retries exhausted, is server available?");
           #endif
         }
-      } 
+      }
       else
       {
         #ifdef DEBUG
-          Serial.println("Sending failed (no ack)");
+          Serial.println("button press ignored");
         #endif
       }
     break;
