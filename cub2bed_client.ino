@@ -6,7 +6,10 @@
   See README.md for target information, revision history, feature requests, etc.
 */
 
-#define DEBUG       // Output to the serial port
+// Conditionals (hardware functionality)
+#define DEBUG         // Output to the serial port
+#define LED           // output to button LED
+//#define NEOPIXEL    // output to neopixel(s)
 
 //button
 #include <buttonhandler.h>
@@ -16,15 +19,16 @@ ButtonHandler buttonSendMessage(sendMessageButtonPin,longButtonPressDelay);
 // globals related to buttons
 enum { BTN_NOPRESS = 0, BTN_SHORTPRESS, BTN_LONGPRESS };
 
-//LED
-//#define ledPin  10
+#ifdef LED
+  #define ledPin  10
+#endif
 
-//NeoPixel
-#include <Adafruit_NeoPixel.h>
-#define neoPixelPin  10
-#define ledCount  1
-//Adafruit_NeoPixel strip = Adafruit_NeoPixel(ledCount, neoPixelPin, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(ledCount, neoPixelPin);
+#ifdef NEOPIXEL
+  #include <Adafruit_NeoPixel.h>
+  #define neoPixelPin   10
+  #define ledCount      1
+  Adafruit_NeoPixel strip = Adafruit_NeoPixel(ledCount, neoPixelPin);
+#endif
 
 // 900mhz radio
 #include <SPI.h>
@@ -63,6 +67,14 @@ void setup()
       {
         delay(1);
       }
+      Serial.println("cub2bed client started");
+      #ifdef LED
+        Serial.print("LED");
+      #endif
+      #ifdef NEOPIXEL
+        Serial.print("NEOPIXEL");
+      #endif
+      Serial.println(" code path(s) enabled");
   #endif
 
   // radio setup
@@ -111,15 +123,17 @@ void setup()
   // Setup push button
   buttonSendMessage.init();
 
-  //LED
-  // pinMode(ledPin, OUTPUT);
-  // digitalWrite(ledPin, LOW);
+  #ifdef LED
+    pinMode(ledPin, OUTPUT);
+    digitalWrite(ledPin, LOW);
+  #endif
 
-  // neopixels
-  strip.begin();
-  strip.setPixelColor(0,0,255,0);
-  strip.setBrightness(50);
-  strip.show();
+  #ifdef NEOPIXEL
+    strip.begin();
+    strip.setPixelColor(0,0,255,0);
+    strip.setBrightness(50);
+    strip.show();
+  #endif
 }
 
 bool waitingForServerAction = false;
@@ -146,7 +160,17 @@ void loop()
       if (strcmp((char *)buf,"ontheway") == 0)
       {
         // visually indicate that request was successful
-        for (int i=0;i<10;i++)
+        #ifdef LED
+          for(int i=0;i<3;i++)
+          {
+            digitalWrite(ledPin, HIGH);
+            delay(500);
+            digitalWrite(ledPin, LOW);
+            delay(500);   
+          }
+        #endif
+        #ifdef NEOPIXEL
+          for (int i=0;i<10;i++)
           {
             strip.setPixelColor(0,0,255,0); // green
             strip.show();
@@ -158,14 +182,25 @@ void loop()
           // return to normal state indicator
           strip.setPixelColor(0,0,255,0);
           strip.show();
+        #endif
         #ifdef DEBUG
           Serial.println("On the way message processed!");
         #endif
       }
       else if (strcmp((char *)buf,"needtowork") == 0)
       {
-      // visually indicate that request was unsuccessful
-      for (int i=0;i<10;i++)
+        // visually indicate that request was unsuccessful
+        #ifdef LED
+          for(int i=0;i<3;i++)
+          {
+            digitalWrite(ledPin, HIGH);
+            delay(500);
+            digitalWrite(ledPin, LOW);
+            delay(500);   
+          }
+        #endif
+        #ifdef NEOPIXEL
+          for (int i=0;i<10;i++)
           {
             strip.setPixelColor(0,255,0,0); // red
             strip.show();
@@ -177,9 +212,10 @@ void loop()
           // return to normal status indicator
           strip.setPixelColor(0,0,255,0);
           strip.show();
-      #ifdef DEBUG
-        Serial.println("Need to work message processed");
-      #endif
+        #endif
+        #ifdef DEBUG
+          Serial.println("Need to work message processed");
+        #endif
       }
       buf[len] = 0; // zero out remaining string
       // release second message blocker
@@ -202,27 +238,34 @@ void resolveButtons()
         if (rf69_manager.sendtoWait(data, sizeof(data),SERVER_ADDRESS))
         {
           #ifdef DEBUG
-            Serial.print("button short press; server acknowledged receiving ");
+            Serial.print("short button press;");
+            Serial.print(" RSSI=");
+            Serial.print(rf69.lastRssi());
+            Serial.print(", server acknowledged receiving ");
             Serial.println((char*)data);
           #endif
-          // led
-          // digitalWrite(ledPin,HIGH);
-          // visually let the sender know the server got the message
-          strip.setPixelColor(0, 255, 255, 0); // yellow
-          strip.show();
+          #ifdef LED
+            digitalWrite(ledPin,HIGH);
+          #endif
+          #ifdef NEOPIXEL
+            strip.setPixelColor(0, 255, 255, 0); // yellow
+            strip.show();
+          #endif
           waitingForServerAction = true;
         } 
         else
         {
           #ifdef DEBUG
-            Serial.println("Retries exhausted, is server available?");
+            Serial.print(" RSSI=");
+            Serial.print(rf69.lastRssi());
+            Serial.println("; retries exhausted, is server available?");
           #endif
         }
       }
       else
       {
         #ifdef DEBUG
-          Serial.println("button press ignored");
+          Serial.println("button press ignored; waiting for server message");
         #endif
       }
     break;
